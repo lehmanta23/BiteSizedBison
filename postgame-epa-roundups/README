@@ -1,1 +1,6 @@
+EPA Roundups
+
+EPA Roundups were created to convey how various dimensions of a game played out according to analytics (from cfbfastr). EPA and success rates, within various contexts, can offer quick insight beneath the surface of simply watching a game live and looking at the box score afterwards. While it can be difficult to fully understand the value within each stat (such as how an EPA/play value measures against other EPA/play values), I included percentiles against all individual team performances during the previous season, which answer the question: how does this specific performance fit into a full season’s worth of performances. The associated color (green or purple) is then applied based on that percentile.
+
+This visualization’s data was calculated (using cfbfastr) and organized in Python within a Jupyter Notebook environment. The chart was produced using matplotlib.
 
