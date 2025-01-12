@@ -1,1 +1,5 @@
+EPA Comparison Charts
 
+The EPA comparison charts were created to show unadjusted EPA/play values for offense and defense within the Big Ten and FBS. The Big Ten logos are plotted for quick comparison within the conference, while the points were plotted to show further context within the wider FBS. 
+
+This visualization’s data was calculated (using cfbfastr) and organized in Python within a Jupyter Notebook environment. The chart was produced using matplotlib. It was updated weekly.
