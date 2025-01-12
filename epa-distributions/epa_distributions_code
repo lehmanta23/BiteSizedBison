@@ -1,0 +1,142 @@
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
+# Team colors dictionary (Big Ten teams and their primary hex colors)
+team_colors = {
+    "Illinois": "#E84A27",
+    "Indiana": "#990000",
+    "Iowa": "#FFCD00",
+    "Maryland": "#E03A3E",
+    "Michigan": "#00274C",
+    "Michigan State": "#18453B",
+    "Minnesota": "#7A0019",
+    "Nebraska": "#E41C38",
+    "Northwestern": "#4E2A84",
+    "Ohio State": "#BB0000",
+    "Oregon": "#F7D300",
+    "Penn State": "#041E42",
+    "Purdue": "#CEB888",
+    "Rutgers": "#CC0033",
+    "UCLA": "#2774AE",
+    "USC": "#990000",
+    "Washington": "#4B2E83",
+    "Wisconsin": "#C5050C"
+}
+
+# Filter the dataframe for Big Ten teams
+big_ten_teams = list(team_colors.keys())
+
+# Filter for Big Ten teams
+pbp_big_ten = pbp_2024[pbp_2024['pos_team'].isin(big_ten_teams) | pbp_2024['def_pos_team'].isin(big_ten_teams)]
+
+# Group by teams for passing and rushing EPA values
+epa_stats = []
+
+for team in big_ten_teams:
+    # EPA when team is on offense (pos_team)
+    pass_offense = pbp_big_ten[(pbp_big_ten['pos_team'] == team) & (pbp_big_ten['pass'] == 1)]['EPA']
+    rush_offense = pbp_big_ten[(pbp_big_ten['pos_team'] == team) & (pbp_big_ten['rush'] == 1)]['EPA']
+
+    # EPA when team is on defense (def_pos_team)
+    pass_defense = pbp_big_ten[(pbp_big_ten['def_pos_team'] == team) & (pbp_big_ten['pass'] == 1)]['EPA']
+    rush_defense = pbp_big_ten[(pbp_big_ten['def_pos_team'] == team) & (pbp_big_ten['rush'] == 1)]['EPA']
+
+    # Calculate the means to sort the teams
+    pass_off_mean = pass_offense.mean()
+    rush_off_mean = rush_offense.mean()
+    pass_def_mean = pass_defense.mean()
+    rush_def_mean = rush_defense.mean()
+    
+    epa_stats.append([team, pass_off_mean, rush_off_mean, pass_def_mean, rush_def_mean])
+
+# Convert into a DataFrame
+epa_df = pd.DataFrame(epa_stats, columns=['Team', 'Pass Offense', 'Rush Offense', 'Pass Defense', 'Rush Defense'])
+
+# Create separate sorted DataFrames for each category
+pass_offense_sorted = epa_df.sort_values(by='Pass Offense', ascending=False).reset_index(drop=True)
+rush_offense_sorted = epa_df.sort_values(by='Rush Offense', ascending=False).reset_index(drop=True)
+pass_defense_sorted = epa_df.sort_values(by='Pass Defense', ascending=True).reset_index(drop=True)
+rush_defense_sorted = epa_df.sort_values(by='Rush Defense', ascending=True).reset_index(drop=True)
+
+# Plotting the KDEs
+fig, axs = plt.subplots(nrows=len(big_ten_teams), ncols=4, figsize=(20, len(big_ten_teams) * 2))
+
+for idx in range(len(big_ten_teams)):
+    # Passing (Offense)
+    team = pass_offense_sorted.iloc[idx]['Team']
+    team_color = team_colors[team]
+    sns.kdeplot(pbp_big_ten[(pbp_big_ten['pos_team'] == team) & (pbp_big_ten['pass'] == 1)]['EPA'], ax=axs[idx, 0], fill=True, color=team_color)
+    axs[idx, 0].axvline(0, color='black', linestyle='-')  # Solid line at 0
+    axs[idx, 0].axvline(pbp_big_ten[(pbp_big_ten['pos_team'] == team) & (pbp_big_ten['pass'] == 1)]['EPA'].mean(), color='black', linestyle='--')  # Dotted line at mean
+    axs[idx, 0].set_xlim(-3.5, 3.5)  # Limit x-axis
+
+    # Add the logo for Passing Offense
+    logo = plt.imread(f'{team}.png')  # Assuming logos are stored with the team name
+    imagebox = OffsetImage(logo, zoom=0.1)
+    ab = AnnotationBbox(imagebox, (0.13, 0.7), xycoords='axes fraction', boxcoords="axes fraction", frameon=False)
+    axs[idx, 0].add_artist(ab)
+
+    # Against the Pass (Defense)
+    team = pass_defense_sorted.iloc[idx]['Team']
+    team_color = team_colors[team]
+    sns.kdeplot(pbp_big_ten[(pbp_big_ten['def_pos_team'] == team) & (pbp_big_ten['pass'] == 1)]['EPA'], ax=axs[idx, 1], fill=True, color=team_color)
+    axs[idx, 1].axvline(0, color='black', linestyle='-')
+    axs[idx, 1].axvline(pbp_big_ten[(pbp_big_ten['def_pos_team'] == team) & (pbp_big_ten['pass'] == 1)]['EPA'].mean(), color='black', linestyle='--')
+    axs[idx, 1].set_xlim(-3.5, 3.5)  # Limit x-axis
+
+    # Add the logo for Against the Pass
+    logo = plt.imread(f'{team}.png')  # Same team used here
+    imagebox = OffsetImage(logo, zoom=0.1)
+    ab = AnnotationBbox(imagebox, (0.13, 0.7), xycoords='axes fraction', boxcoords="axes fraction", frameon=False)
+    axs[idx, 1].add_artist(ab)
+
+    # Rushing (Offense)
+    team = rush_offense_sorted.iloc[idx]['Team']
+    team_color = team_colors[team]
+    sns.kdeplot(pbp_big_ten[(pbp_big_ten['pos_team'] == team) & (pbp_big_ten['rush'] == 1)]['EPA'], ax=axs[idx, 2], fill=True, color=team_color)
+    axs[idx, 2].axvline(0, color='black', linestyle='-')
+    axs[idx, 2].axvline(pbp_big_ten[(pbp_big_ten['pos_team'] == team) & (pbp_big_ten['rush'] == 1)]['EPA'].mean(), color='black', linestyle='--')
+    axs[idx, 2].set_xlim(-3.5, 3.5)  # Limit x-axis
+
+    # Add the logo for Rushing Offense
+    logo = plt.imread(f'{team}.png')  # Same team used here
+    imagebox = OffsetImage(logo, zoom=0.1)
+    ab = AnnotationBbox(imagebox, (0.13, 0.7), xycoords='axes fraction', boxcoords="axes fraction", frameon=False)
+    axs[idx, 2].add_artist(ab)
+
+    # Against the Rush (Defense)
+    team = rush_defense_sorted.iloc[idx]['Team']
+    team_color = team_colors[team]
+    sns.kdeplot(pbp_big_ten[(pbp_big_ten['def_pos_team'] == team) & (pbp_big_ten['rush'] == 1)]['EPA'], ax=axs[idx, 3], fill=True, color=team_color)
+    axs[idx, 3].axvline(0, color='black', linestyle='-')
+    axs[idx, 3].axvline(pbp_big_ten[(pbp_big_ten['def_pos_team'] == team) & (pbp_big_ten['rush'] == 1)]['EPA'].mean(), color='black', linestyle='--')
+    axs[idx, 3].set_xlim(-3.5, 3.5)  # Limit x-axis
+
+    # Add the logo for Against the Rush
+    logo = plt.imread(f'{team}.png')  # Same team used here
+    imagebox = OffsetImage(logo, zoom=0.1)
+    ab = AnnotationBbox(imagebox, (0.13, 0.7), xycoords='axes fraction', boxcoords="axes fraction", frameon=False)
+    axs[idx, 3].add_artist(ab)
+
+fig.suptitle("Big Ten Passing & Rushing EPA Distributions, Offense v. Defense", fontsize=30, fontweight='bold', x=0.5, y=0.92)
+
+# Set the column titles
+columns = ["Passing", "Against the Pass", "Rushing", "Against the Rush"]
+for col, ax in zip(columns, axs[0]):
+    ax.set_title(col, fontsize=20)
+
+for row in axs:
+    for ax in row:
+        ax.set_xlabel(" ")
+        ax.set_ylabel(" ")
+        ax.set_yticks([])
+        ax.grid(False)
+        
+fig.text(0.5, 0.90, 'Data Source: @cfbfastr | Design: Bite-Sized Bison', 
+         ha='center', va='center', fontsize=16, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+
+plt.tight_layout()
+plt.show()
