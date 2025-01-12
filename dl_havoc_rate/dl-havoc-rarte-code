@@ -1,0 +1,220 @@
+import pandas as pd
+import pickle
+import os
+import matplotlib.pyplot as plt
+
+def_summ_2023 = pd.read_csv('defense.csv')
+
+dl_havoc = (
+    def_summ_2023[['player', 'team_name', 'position', 'batted_passes', 'forced_fumbles', 
+        'fumble_recoveries', 'hits', 'hurries', 'interceptions', 
+        'pass_break_ups', 'sacks', 'tackles_for_loss']]
+    .loc[lambda x: x['position'].isin(['ED', 'DI'])]  # Filter for positions ED and DI
+    .groupby('team_name', as_index=False)  # Group by team_name
+    .sum(numeric_only=True)  # Sum numeric columns
+)
+
+# Add a new variable that sums across the row
+dl_havoc['havoc_plays'] = dl_havoc.iloc[:, 1:].sum(axis=1)
+
+import pandas as pd
+
+# List of play types to be removed
+play_types_to_remove = [
+    'Kickoff Return', 'Penalty', 'Field Goal Good', 'Kickoff', 'Timeout',
+    'Punt', 'End Period', 'End of Half', 'Field Goal Missed', 'End of Game'
+]
+
+# Filter for only 2024 plays, FBS teams, plays where either rush is 1 or pass is 1,
+# and exclude the unwanted play types
+pbp_2024_fbs = pbp_2024[
+    (pbp_2024['year'] == 2024) & 
+    (pbp_2024['def_pos_team'].isin(fbs_teams)) &
+    ((pbp_2024['rush'] == 1) | (pbp_2024['pass'] == 1)) &  # Only include rush or pass
+    (~pbp_2024['play_type'].isin(play_types_to_remove))    # Exclude unwanted play types
+]
+
+# Group by 'def_pos_team' and count the number of defensive plays
+# Counting all plays where the team was on defense, including only rush or pass
+defensive_plays_df = (
+    pbp_2024_fbs
+    .groupby('def_pos_team')
+    .size()  # Count number of defensive plays
+    .reset_index(name='defensive_plays')  # Create dataframe with 'defensive_plays' count
+    .rename(columns={'def_pos_team': 'team'})  # Rename 'def_pos_team' to 'team'
+)
+
+# Function to standardize team names
+def standardize_team_names(name):
+    return name.lower().replace(" ", "").replace("-", "").replace(".", "")
+
+# Load existing dictionary if it exists
+def load_name_mapping(filename='team_name_mapping.pkl'):
+    if os.path.exists(filename):
+        with open(filename, 'rb') as f:
+            return pickle.load(f)
+    else:
+        return {}
+
+# Save the updated dictionary to a file
+def save_name_mapping(name_mapping, filename='team_name_mapping.pkl'):
+    with open(filename, 'wb') as f:
+        pickle.dump(name_mapping, f)
+    print(f"Name mapping dictionary saved to '{filename}'.")
+
+# Initialize or load the dictionary
+name_mapping = load_name_mapping()
+
+# Standardize team names in both dataframes
+dl_havoc['team_name_standard'] = dl_havoc['team_name'].apply(standardize_team_names)
+defensive_plays_df['team_standard'] = defensive_plays_df['team'].apply(standardize_team_names)
+
+# Find matches and mismatches
+matched_names = set(dl_havoc['team_name_standard']).intersection(defensive_plays_df['team_standard'])
+dl_havoc_missing = dl_havoc[~dl_havoc['team_name_standard'].isin(defensive_plays_df['team_standard'])]
+defensive_plays_missing = defensive_plays_df[~defensive_plays_df['team_standard'].isin(dl_havoc['team_name_standard'])]
+
+# Update dictionary with matches
+for name in matched_names:
+    if name not in name_mapping:
+        name_mapping[name] = name
+
+# Handle mismatches in dl_havoc
+for name in dl_havoc_missing['team_name_standard']:
+    if name not in name_mapping:
+        print(f"Mismatch found in dl_havoc: {name}")
+        correct_name = input("Enter the correct name from defensive_plays_df: ")
+        name_mapping[name] = standardize_team_names(correct_name)
+
+# Handle mismatches in defensive_plays_df
+for name in defensive_plays_missing['team_standard']:
+    if name not in name_mapping:
+        print(f"Mismatch found in defensive_plays_df: {name}")
+        correct_name = input("Enter the correct name from dl_havoc: ")
+        name_mapping[name] = standardize_team_names(correct_name)
+
+# Save the updated dictionary
+save_name_mapping(name_mapping)
+
+# Function to apply the mapping
+def apply_mapping(name):
+    standardized_name = standardize_team_names(name)
+    return name_mapping.get(standardized_name, name)
+
+# Apply the mapping to both dataframes (for future use)
+dl_havoc['team_name_corrected'] = dl_havoc['team_name'].apply(apply_mapping)
+defensive_plays_df['team_corrected'] = defensive_plays_df['team'].apply(apply_mapping)
+
+# Ensure we are only using the corrected names for merging
+dl_havoc['team_name_standard'] = dl_havoc['team_name_corrected']
+defensive_plays_df['team_standard'] = defensive_plays_df['team_corrected']
+
+# Merge dataframes on the standardized names
+merged_df = pd.merge(dl_havoc, defensive_plays_df[['team_standard', 'defensive_plays']], 
+                     left_on='team_name_standard', 
+                     right_on='team_standard', 
+                     how='left')
+
+# Drop the extra corrected name columns
+havoc = merged_df.drop(columns=['team_name_corrected', 'team_standard'])
+
+# Compute the percentage of havoc_plays relative to defensive_plays
+havoc['havoc_rate'] = (havoc['havoc_plays'] / havoc['defensive_plays']) * 100
+
+# Sort the DataFrame by havoc_rate in descending order
+havoc = havoc.sort_values(by='havoc_rate', ascending=False)
+
+# Format the percentage with a percentage sign
+havoc['havoc_rate'] = havoc['havoc_rate'].apply(lambda x: f"{x:.2f}%")
+
+# Filter DataFrame to include only Big Ten teams
+big_ten_teams = [
+    "illinois", "indiana", "iowa", "maryland", "michigan", "michiganstate",
+    "minnesota", "nebraska", "northwestern", "ohiostate", "oregon", "pennstate",
+    "purdue", "rutgers", "ucla", "usc", "washington", "wisconsin"
+]
+
+# Convert team names to lowercase for matching
+havoc['team_name_standard'] = havoc['team_name_standard'].str.lower()
+
+# Filter for Big Ten teams
+big_ten_df = havoc[havoc['team_name_standard'].isin([team.lower() for team in big_ten_teams])]
+
+# Convert havoc_rate to numeric for sorting
+big_ten_df['havoc_rate_numeric'] = big_ten_df['havoc_rate'].str.rstrip('%').astype(float)
+
+# Sort the DataFrame by havoc_rate and then reverse the order
+big_ten_df = big_ten_df.sort_values(by='havoc_rate_numeric', ascending=False)
+big_ten_df = big_ten_df.iloc[::-1].reset_index(drop=True)
+
+# Create new columns for grouped variables
+big_ten_df['Passes Defended'] = big_ten_df['batted_passes'] + big_ten_df['pass_break_ups']
+big_ten_df['Fumbles'] = big_ten_df['forced_fumbles'] + big_ten_df['fumble_recoveries']
+big_ten_df['QB Pressure'] = big_ten_df['hits'] + big_ten_df['hurries']
+
+# List of grouped and individual variables to stack
+grouped_variables = ['QB Pressure', 'Sacks', 'Tackles for Loss', 'Fumbles', 'Passes Defended', 'Interceptions']
+
+big_ten_df.rename(columns={
+    'interceptions': 'Interceptions',
+    'sacks': 'Sacks',
+    'tackles_for_loss': 'Tackles for Loss'
+}, inplace=True)
+
+# Set colors for the plot
+colors = plt.get_cmap('Set2').colors
+
+# Plot
+dl_havoc_fig, ax = plt.subplots(figsize=(12, 8))
+
+# Create the stacked bar chart
+big_ten_df.plot(kind='barh', stacked=True, 
+                x='team_name', y=grouped_variables,
+                color=colors[:len(grouped_variables)],
+                edgecolor='black',
+                zorder=2,
+                ax=ax)
+
+# Add data labels
+for index, row in big_ten_df.iterrows():
+    ax.text(row[grouped_variables].sum() + 2, index, row['havoc_rate'], va='center')
+
+# Adjust title and legend
+dl_havoc_fig.suptitle('2024 Big Ten Defensive Line Havoc Rate', fontsize=16, y=1.01)
+ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.06), ncol=len(grouped_variables), fontsize=11)
+
+# Set labels
+ax.set_xlabel('DL Havoc Instances', fontsize=12)
+ax.set_ylabel('')
+ax.set_xlim(0, dl_havoc['havoc_plays'].max())
+ax.grid(axis='x', linestyle='-', color='gray', alpha=0.5, zorder=1)
+ax.grid(axis='y', visible=False)
+
+# Function to add a logo
+def add_logo(fig, image_path, loc, zoom, alpha):
+    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+    import matplotlib.image as mpimg
+
+    image = mpimg.imread(image_path)
+    imagebox = OffsetImage(image, zoom=zoom, alpha=alpha)
+    ab = AnnotationBbox(imagebox, loc, frameon=False, pad=0, bboxprops=dict(edgecolor='none'))
+    ax = fig.add_subplot(111, frame_on=False)
+    ax.add_artist(ab)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+
+# Add the logo to the plot
+add_logo(dl_havoc_fig, 'bsb.png', loc=(0.94, 0.095), zoom=0.09, alpha=0.5)
+
+# Add data source and design credit
+plt.text(0.985, 0.02, 'Data Source: Pro Football Focus & @cfbfastr | Design: Bite-Sized Bison', 
+         ha='right', va='center', fontsize=10, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+plt.text(0, -0.1, 'DL Havoc Rate = Total DL havoc instances divided by total defensive plays', 
+         ha='left', va='center', fontsize=10, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+
+# Display the plot
+plt.tight_layout(rect=[0, 0, 1, 1.035])  # Adjust layout to make space for the title
+plt.show()
+
+  
