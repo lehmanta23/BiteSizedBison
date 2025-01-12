@@ -1,0 +1,406 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import matplotlib.image as mpimg
+
+# List of Big Ten teams
+big_ten_teams = [
+    "Illinois", "Indiana", "Iowa", "Maryland", "Michigan", "Michigan State", 
+    "Minnesota", "Nebraska", "Northwestern", "Ohio State", "Oregon", "Penn State", 
+    "Purdue", "Rutgers", "UCLA", "USC", "Washington", "Wisconsin"
+]
+
+def calculate_team_summaries_with_pos_team_only(pbp_2024, fbs_teams):
+    # Initialize an empty list to hold the summary data for each team
+    team_summaries = []
+    
+    # Filter for only Big Ten teams from the list
+    big_ten_teams_filtered = [team for team in fbs_teams if team in cfp_teams]
+    
+    # Loop through each team in big_ten_teams_filtered
+    for team in big_ten_teams_filtered:
+        # Filter for plays where the team is the pos_team (offense)
+        team_data = pbp_2024[pbp_2024['pos_team'] == team]
+        
+        # Sum the required variables
+        new_series_sum = team_data['new_series'].sum()
+        
+        # Sum first downs from penalty and yards only for valid first downs
+        firstD_by_penalty_sum = team_data['firstD_by_penalty'].sum()
+        firstD_by_yards_sum = team_data['firstD_by_yards'].sum()
+        
+        # Calculate total first downs by combining first downs by penalty and by yards
+        total_first_downs = firstD_by_penalty_sum + firstD_by_yards_sum
+        
+        # Calculate percentage of series that are converted by first downs
+        first_down_conversion_percentage = (total_first_downs / new_series_sum) * 100 if new_series_sum > 0 else 0
+        
+        # Sum other variables for offensive outcomes
+        turnover_sum = team_data['turnover'].sum()
+        punt_sum = team_data['punt'].sum()
+        touchdown_sum = team_data['touchdown'].sum()
+        
+        # Sum fg_inds where fg_made is True and False
+        fg_inds_sum = team_data['fg_inds'].sum()
+        
+        # Remove field goals made from scoring plays
+        scoring_play_sum_without_fg = touchdown_sum
+        
+        # Combine field goals made and missed
+        total_field_goals = fg_inds_sum
+
+        # Calculate percentages for each outcome (turnover, punt, scoring play without field goals, field goals)
+        turnover_percentage = (turnover_sum / new_series_sum) * 100 if new_series_sum > 0 else 0
+        punt_percentage = (punt_sum / new_series_sum) * 100 if new_series_sum > 0 else 0
+        scoring_play_percentage = (scoring_play_sum_without_fg / new_series_sum) * 100 if new_series_sum > 0 else 0
+        total_field_goals_percentage = (total_field_goals / new_series_sum) * 100 if new_series_sum > 0 else 0
+        
+        # Append the results to the summary list as a dictionary
+        team_summaries.append({
+            'team': team,
+            'new_series': new_series_sum,
+            'firstD_by_penalty': firstD_by_penalty_sum,
+            'firstD_by_yards': firstD_by_yards_sum,
+            'total_first_downs': total_first_downs,
+            'first_down_conversion_percentage': first_down_conversion_percentage,
+            'turnover': turnover_sum,
+            'turnover_percentage': turnover_percentage,
+            'punt': punt_sum,
+            'punt_percentage': punt_percentage,
+            'touchdowns': scoring_play_sum_without_fg,
+            'scoring_play_percentage': scoring_play_percentage,
+            'total_field_goals': total_field_goals,
+            'total_field_goals_percentage': total_field_goals_percentage
+        })
+    
+    # Convert the summary list into a DataFrame
+    team_summary_df = pd.DataFrame(team_summaries)
+    
+    return team_summary_df
+
+team_summary_2024 = calculate_team_summaries_with_pos_team_only(pbp_2024, fbs_teams)
+
+# Create a new DataFrame with team names and the relevant percentages
+visualization_df = pd.DataFrame({
+    'team': team_summary_2024['team'],
+    'first_down_percentage': team_summary_2024['first_down_conversion_percentage'],
+    'touchdown_percentage': team_summary_2024['scoring_play_percentage'],
+    'fg_percentage': team_summary_2024['total_field_goals_percentage'],
+    'punt_percentage': team_summary_2024['punt_percentage'],  # Add punt percentage
+    'turnover_percentage': team_summary_2024['turnover_percentage']  # Add turnover percentage
+})
+
+# Calculate the sum of the touchdown, first down, field goal, punt, and turnover percentages as conversion_percentage
+visualization_df['conversion_percentage'] = (visualization_df['first_down_percentage'] +
+                                             visualization_df['touchdown_percentage'] +
+                                             visualization_df['fg_percentage'])
+
+# Calculate the total percentage (sum of all percentages except conversion_percentage)
+visualization_df['total_percentage'] = (visualization_df['first_down_percentage'] +
+                                        visualization_df['touchdown_percentage'] +
+                                        visualization_df['fg_percentage'] +
+                                        visualization_df['punt_percentage'] +
+                                        visualization_df['turnover_percentage'])
+
+# Sort the DataFrame in descending order based on the conversion_percentage
+visualization_df_sorted = visualization_df.sort_values(by='conversion_percentage', ascending=False)
+
+# Let's create a copy to work on adjustments
+adjusted_df = visualization_df_sorted.copy()
+
+# Calculate the scale factor for each team to ensure total_percentage equals 100
+adjusted_df['scale_factor'] = 100 / adjusted_df['total_percentage']
+
+# Adjust the relevant percentages (first_down_percentage, touchdown_percentage, fg_percentage, punt_percentage, turnover_percentage)
+adjusted_df['first_down_percentage'] *= adjusted_df['scale_factor']
+adjusted_df['touchdown_percentage'] *= adjusted_df['scale_factor']
+adjusted_df['fg_percentage'] *= adjusted_df['scale_factor']
+adjusted_df['punt_percentage'] *= adjusted_df['scale_factor']
+adjusted_df['turnover_percentage'] *= adjusted_df['scale_factor']
+
+# After adjustment, calculate the new total_percentage
+adjusted_df['total_percentage'] = (adjusted_df['first_down_percentage'] +
+                                    adjusted_df['touchdown_percentage'] +
+                                    adjusted_df['fg_percentage'] +
+                                    adjusted_df['punt_percentage'] +
+                                    adjusted_df['turnover_percentage'])
+
+# Calculate the conversion_percentage by adding touchdowns, first downs, and field goals
+adjusted_df['conversion_percentage'] = (adjusted_df['touchdown_percentage'] +
+                                        adjusted_df['first_down_percentage'] +
+                                        adjusted_df['fg_percentage'])
+
+# Sort the DataFrame in descending order based on conversion_percentage
+adjusted_df_sorted = adjusted_df.sort_values(by='conversion_percentage', ascending=False)
+
+# Check the adjusted DataFrame with the new column
+print(adjusted_df_sorted[['team', 'first_down_percentage', 'touchdown_percentage', 
+                          'fg_percentage', 'punt_percentage', 'turnover_percentage', 
+                          'conversion_percentage', 'total_percentage']])
+
+# Assuming the adjusted_df is the final DataFrame with the corrected total_percentage and all percentage columns.
+
+# Sort the DataFrame in descending order based on conversion_percentage
+visualization_df_sorted = adjusted_df.sort_values(by='conversion_percentage', ascending=True)
+
+# Set the figure size and create axes
+conversion_fig, ax = plt.subplots(figsize=(12, 8))
+
+# Manually set colors for each section
+touchdown_color = '#4CAF50'  # Dark green for touchdowns
+first_down_color = '#A5D6A7'  # Medium green for first downs
+fg_color = '#C8E6C9'          # Light green for field goals
+punt_color = '#E1BEE7'        # Light purple for punts
+turnover_color = '#BA68C8'    # Dark purple for turnovers
+
+# Create the horizontal stacked bar chart with customized colors
+bars_touchdown = ax.barh(visualization_df_sorted['team'], visualization_df_sorted['touchdown_percentage'], 
+                          label='Touchdown', color=touchdown_color)
+bars_first_down = ax.barh(visualization_df_sorted['team'], visualization_df_sorted['first_down_percentage'], 
+                           left=visualization_df_sorted['touchdown_percentage'], 
+                           label='First Down', color=first_down_color)
+bars_fg = ax.barh(visualization_df_sorted['team'], visualization_df_sorted['fg_percentage'], 
+                  left=visualization_df_sorted['touchdown_percentage'] + visualization_df_sorted['first_down_percentage'], 
+                  label='Field Goal', color=fg_color)
+bars_punt = ax.barh(visualization_df_sorted['team'], visualization_df_sorted['punt_percentage'], 
+                    left=visualization_df_sorted['touchdown_percentage'] + visualization_df_sorted['first_down_percentage'] + visualization_df_sorted['fg_percentage'], 
+                    label='Punt', color=punt_color)
+bars_turnover = ax.barh(visualization_df_sorted['team'], visualization_df_sorted['turnover_percentage'], 
+                         left=visualization_df_sorted['touchdown_percentage'] + visualization_df_sorted['first_down_percentage'] + visualization_df_sorted['fg_percentage'] + visualization_df_sorted['punt_percentage'], 
+                         label='Turnover', color=turnover_color)
+
+# Add text labels inside the bars
+for i, (touchdown, first_down, fg, punt, turnover) in enumerate(zip(
+        visualization_df_sorted['touchdown_percentage'], 
+        visualization_df_sorted['first_down_percentage'], 
+        visualization_df_sorted['fg_percentage'],
+        visualization_df_sorted['punt_percentage'],
+        visualization_df_sorted['turnover_percentage'])):
+
+    total_width = 0  # Initialize total width to calculate midpoints
+
+    # Add each section to the total width and place the label
+    for value, label in zip([touchdown, first_down, fg, punt, turnover], 
+                            ['Touchdown', 'First Down', 'Field Goal', 'Punt', 'Turnover']):
+        midpoint = total_width + (value / 2)  # Midpoint of the current section
+        if value > 3:  # Only add text labels if the section is large enough
+            ax.text(midpoint, i, f'{round(value)}%', ha='center', va='center', color='black', fontsize=13)
+        total_width += value  # Update total width
+
+# Add labels and title
+ax.set_xlabel('Percentage of Series Outcomes (%)', fontsize=12)
+ax.set_title('CFP Offensive Series Outcomes', fontsize=18, pad=40)
+ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.003), ncol=5, fontsize=12)  # Adjust the position
+ax.grid(axis='x', linestyle='--', alpha=0.7)
+ax.tick_params(axis='y', labelsize=12)
+ax.tick_params(axis='x', labelsize=12)
+ax.set_xlim(0, 100)
+
+# Load logo image
+image = mpimg.imread('bsb.png')
+
+# Add logo above the plot using AnnotationBbox
+# Adjust position as necessary to align next to the title
+imagebox = OffsetImage(image, zoom=0.08, alpha=0.5, zorder=0)  # Adjust zoom as necessary
+ab = AnnotationBbox(imagebox, (0.93, 0.93), frameon=False, xycoords='figure fraction', boxcoords="offset points", pad=0)  # Positioning based on figure fraction
+conversion_fig.add_artist(ab)
+ab.set_zorder(-1)
+
+# Add additional text annotations
+ax.text(100, -4, 'Data Source: @cfbfastr | Design: Bite-Sized Bison | Inspiration: @benbbaldwin', 
+        ha='right', va='center', fontsize=10, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+ax.text(100, -3.4, 'Series = Set of downs beginning with first down; Turnover on downs included in turnover outcomes, Missed field goals included in field goals outcomes', 
+        ha='right', va='center', fontsize=10, color='#36454F', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+
+# Show the plot
+plt.tight_layout()
+plt.show()
+
+
+
+# Defensive conversion chart
+
+def calculate_team_summaries_with_def_pos_team_only(pbp_2024, fbs_teams):
+    # Initialize an empty list to hold the summary data for each team
+    team_summaries = []
+    
+    # Filter for only Big Ten teams
+    big_ten_teams_filtered = [team for team in fbs_teams if team in cfp_teams]
+    
+    # Loop through each team in big_ten_teams_filtered
+    for team in big_ten_teams_filtered:
+        # Filter for plays where the team is the def_pos_team (defense)
+        team_data = pbp_2024[pbp_2024['def_pos_team'] == team]
+        
+        # Sum the required variables
+        new_series_sum = team_data['new_series'].sum()
+        
+        # Sum first downs by penalty and yards for the opposing offense (negative impact for defense)
+        firstD_by_penalty_sum = team_data['firstD_by_penalty'].sum()
+        firstD_by_yards_sum = team_data['firstD_by_yards'].sum()
+        
+        # Calculate total first downs
+        total_first_downs = firstD_by_penalty_sum + firstD_by_yards_sum
+        
+        # Calculate percentage of defensive series where first downs were allowed
+        first_down_conversion_percentage = (total_first_downs / new_series_sum) * 100 if new_series_sum > 0 else 0
+        
+        # Sum other variables for defensive outcomes
+        turnover_sum = team_data['turnover'].sum()  # Defensive turnovers (positive for defense)
+        punt_sum = team_data['punt'].sum()          # Opponent punts (positive for defense)
+        touchdown_sum = team_data['touchdown'].sum()  # Opponent touchdowns (negative for defense)
+        
+        # Field goal indicators (made or missed)
+        fg_inds_sum = team_data['fg_inds'].sum()
+        
+        # Remove field goals made from scoring plays (negative for defense)
+        scoring_play_sum_without_fg = touchdown_sum
+        
+        # Total field goals (positive or negative depending on miss/make)
+        total_field_goals = fg_inds_sum
+
+        # Calculate percentages for each defensive outcome
+        turnover_percentage = (turnover_sum / new_series_sum) * 100 if new_series_sum > 0 else 0
+        punt_percentage = (punt_sum / new_series_sum) * 100 if new_series_sum > 0 else 0
+        scoring_play_percentage = (scoring_play_sum_without_fg / new_series_sum) * 100 if new_series_sum > 0 else 0
+        total_field_goals_percentage = (total_field_goals / new_series_sum) * 100 if new_series_sum > 0 else 0
+        
+        # Append the results to the summary list as a dictionary
+        team_summaries.append({
+            'team': team,
+            'new_series': new_series_sum,
+            'first_down_conversion_percentage': first_down_conversion_percentage,  # Defensive stat
+            'turnover_percentage': turnover_percentage,    # Positive for defense
+            'punt_percentage': punt_percentage,            # Positive for defense
+            'touchdown_percentage': scoring_play_percentage,  # Negative for defense
+            'fg_percentage': total_field_goals_percentage   # Depends on make/miss
+        })
+    
+    # Convert the summary list into a DataFrame
+    team_summary_df = pd.DataFrame(team_summaries)
+    
+    return team_summary_df
+
+team_summary_2024_defense = calculate_team_summaries_with_def_pos_team_only(pbp_2024, fbs_teams)
+
+# Create a new DataFrame for the defensive series outcomes
+defense_visualization_df = pd.DataFrame({
+    'team': team_summary_2024_defense['team'],
+    'first_down_percentage': team_summary_2024_defense['first_down_conversion_percentage'],
+    'touchdown_percentage': team_summary_2024_defense['touchdown_percentage'],
+    'fg_percentage': team_summary_2024_defense['fg_percentage'],
+    'punt_percentage': team_summary_2024_defense['punt_percentage'],
+    'turnover_percentage': team_summary_2024_defense['turnover_percentage']
+})
+
+# Calculate conversion percentage (negative defensive outcomes: first downs, touchdowns, field goals)
+defense_visualization_df['conversion_percentage'] = (defense_visualization_df['first_down_percentage'] +
+                                                     defense_visualization_df['touchdown_percentage'] +
+                                                     defense_visualization_df['fg_percentage'])
+
+# Sort by conversion_percentage in ascending order (lowest allowed rates at the top)
+defense_visualization_df_sorted = defense_visualization_df.sort_values(by='conversion_percentage', ascending=True)
+
+# Adjust percentages to sum to 100
+defense_adjusted_df = defense_visualization_df_sorted.copy()
+
+# Calculate the scale factor to ensure percentages sum to 100%
+defense_adjusted_df['scale_factor'] = 100 / (defense_adjusted_df['first_down_percentage'] +
+                                             defense_adjusted_df['touchdown_percentage'] +
+                                             defense_adjusted_df['fg_percentage'] +
+                                             defense_adjusted_df['punt_percentage'] +
+                                             defense_adjusted_df['turnover_percentage'])
+
+# Scale the relevant percentages
+defense_adjusted_df['first_down_percentage'] *= defense_adjusted_df['scale_factor']
+defense_adjusted_df['touchdown_percentage'] *= defense_adjusted_df['scale_factor']
+defense_adjusted_df['fg_percentage'] *= defense_adjusted_df['scale_factor']
+defense_adjusted_df['punt_percentage'] *= defense_adjusted_df['scale_factor']
+defense_adjusted_df['turnover_percentage'] *= defense_adjusted_df['scale_factor']
+
+# Calculate the total percentage of all outcomes (optional, for checking)
+defense_adjusted_df['total_percentage'] = (defense_adjusted_df['first_down_percentage'] +
+                                           defense_adjusted_df['touchdown_percentage'] +
+                                           defense_adjusted_df['fg_percentage'] +
+                                           defense_adjusted_df['punt_percentage'] +
+                                           defense_adjusted_df['turnover_percentage'])
+
+# Calculate the conversion percentage as the sum of touchdown, first down, and FG percentages
+defense_adjusted_df['conversion_percentage'] = (defense_adjusted_df['first_down_percentage'] +
+                                                defense_adjusted_df['touchdown_percentage'] +
+                                                defense_adjusted_df['fg_percentage'])
+
+# Sort the DataFrame by conversion percentage in ascending order
+defense_adjusted_df_sorted = defense_adjusted_df.sort_values(by='conversion_percentage', ascending=False)
+
+# Set the figure size and create axes
+def_conversion_fig, ax = plt.subplots(figsize=(12, 8))
+
+# Define custom colors for each section
+touchdown_color = '#4CAF50'  # Dark green for touchdowns
+first_down_color = '#A5D6A7'  # Medium green for first downs
+fg_color = '#C8E6C9'         # Light green for field goals
+punt_color = '#E1BEE7'       # Light purple for punts
+turnover_color = '#BA68C8'   # Dark purple for turnovers
+
+# Create the horizontal stacked bar chart using the adjusted and sorted DataFrame
+bars_touchdown = ax.barh(defense_adjusted_df_sorted['team'], defense_adjusted_df_sorted['touchdown_percentage'],
+                         label='Touchdown', color=touchdown_color)
+bars_first_down = ax.barh(defense_adjusted_df_sorted['team'], defense_adjusted_df_sorted['first_down_percentage'],
+                          left=defense_adjusted_df_sorted['touchdown_percentage'], 
+                          label='First Down', color=first_down_color)
+bars_fg = ax.barh(defense_adjusted_df_sorted['team'], defense_adjusted_df_sorted['fg_percentage'],
+                  left=defense_adjusted_df_sorted['touchdown_percentage'] + defense_adjusted_df_sorted['first_down_percentage'], 
+                  label='Field Goal', color=fg_color)
+bars_punt = ax.barh(defense_adjusted_df_sorted['team'], defense_adjusted_df_sorted['punt_percentage'],
+                    left=defense_adjusted_df_sorted['touchdown_percentage'] + defense_adjusted_df_sorted['first_down_percentage'] + defense_adjusted_df_sorted['fg_percentage'], 
+                    label='Punt', color=punt_color)
+bars_turnover = ax.barh(defense_adjusted_df_sorted['team'], defense_adjusted_df_sorted['turnover_percentage'],
+                         left=defense_adjusted_df_sorted['touchdown_percentage'] + defense_adjusted_df_sorted['first_down_percentage'] + defense_adjusted_df_sorted['fg_percentage'] + defense_adjusted_df_sorted['punt_percentage'], 
+                         label='Turnover', color=turnover_color)
+
+# Add text labels inside the bars for each percentage
+for i, (touchdown, first_down, fg, punt, turnover) in enumerate(zip(
+        defense_adjusted_df_sorted['touchdown_percentage'], 
+        defense_adjusted_df_sorted['first_down_percentage'], 
+        defense_adjusted_df_sorted['fg_percentage'],
+        defense_adjusted_df_sorted['punt_percentage'],
+        defense_adjusted_df_sorted['turnover_percentage'])):
+
+    total_width = 0  # Initialize total width to calculate midpoints
+
+    # Add each section to the total width and place the label
+    for value, label in zip([touchdown, first_down, fg, punt, turnover], 
+                            ['Touchdown', 'First Down', 'Field Goal', 'Punt', 'Turnover']):
+        midpoint = total_width + (value / 2)  # Midpoint of the current section
+        if value > 3:  # Only add text labels if the section is large enough
+            ax.text(midpoint, i, f'{round(value)}%', ha='center', va='center', color='black', fontsize=13)
+        total_width += value  # Update total width
+
+# Add labels and title
+ax.set_xlabel('Percentage of Series Outcomes (%)', fontsize=12)
+ax.set_title('CFP Defensive Series Outcomes', fontsize=18, pad=40)
+ax.legend(loc='lower center', bbox_to_anchor=(0.5, 1.003), ncol=5, fontsize=12)  # Adjust the position
+ax.grid(axis='x', linestyle='--', alpha=0.7)
+ax.tick_params(axis='y', labelsize=12)
+ax.tick_params(axis='x', labelsize=12)
+ax.set_xlim(0, 100)
+
+# Load and add the logo image (if available)
+image = mpimg.imread('bsb.png')
+
+imagebox = OffsetImage(image, zoom=0.08, alpha=0.5, zorder=0)  # Adjust zoom as necessary
+ab = AnnotationBbox(imagebox, (0.93, 0.93), frameon=False, xycoords='figure fraction', boxcoords="offset points", pad=0)
+def_conversion_fig.add_artist(ab)
+ab.set_zorder(-1)
+
+# Add additional text annotations
+ax.text(100, -4, 'Data Source: @cfbfastr | Design: Bite-Sized Bison | Inspiration: @benbbaldwin', 
+        ha='right', va='center', fontsize=10, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+ax.text(100, -3.4, 'Series = Set of downs beginning with first down; Turnover on downs included in turnover outcomes, Missed field goals included in field goals outcomes', 
+        ha='right', va='center', fontsize=10, color='#36454F', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+
+# Display the final plot
+plt.tight_layout()
+plt.show()
+
