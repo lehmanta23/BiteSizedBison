@@ -1,1 +1,5 @@
+EPA Distributions
 
+EPA distributions aim to convey several layers of insight around how teams perform on passing and rushing plays, both on offense and defense. In its simplest form, the chart is offering a ranking of teams (Big Ten or CFP in the examples) by EPA/play in each category (shown by a dotted line on each plot), but since each density chart shows a KDE curve, much more can be gleaned from analyzing the shapes of the curves, such as how much explosion a team gets by passing or how often a defense holds opposing offenses beneath expectation when they run. It’s an efficient way to communicate loads of information at various levels.
+
+This visualization’s data was calculated (using cfbfastr) and organized in Python within a Jupyter Notebook environment. The chart was produced using matplotlib.
