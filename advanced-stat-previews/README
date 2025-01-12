@@ -1,1 +1,6 @@
+Advanced Stat Previews
+
+Advanced Stat Previews were created to convey statistical profiles of each team on either side of the ball. The statistics are positioned in such a way that fans can see where, based on which team is on offense, they might see advantages between the opposing teams, whether that is passing, rushing, early downs, or a push from the offensive line. Also included were advanced analytics from sources such as ESPN SP+, ESPN FPI, and Brian Fremeau’s FEI ratings, and all of those stats are credited within the visualizations. The colors (green or purple) indicate whether a team’s ranking in the corresponding stat is within a certain tier of FBS teams, offering an easy method to evaluate the chart for those who either don’t understand the stats or can’t necessarily differentiate the rankings quickly.
+
+This visualization’s data was calculated (using cfbfastr) and organized in Python within a Jupyter Notebook environment. Then, since other data sources were involved, the data was manually entered into a Google Sheet with conditional formatting for the color changes. A screenshot was taken of each finished sheet.
 
