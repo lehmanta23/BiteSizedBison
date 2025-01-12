@@ -1,0 +1,178 @@
+import pandas as pd
+import numpy as np
+
+def fbs_2024_stats(pbp, fbs_teams):
+    pbp_2024 = pbp[pbp['year'] == 2024]
+    
+    team_stats = {}
+    
+    for team in fbs_teams:
+        team_data = pbp_2024[pbp_2024['pos_team'] == team]
+        opponent_data = pbp_2024[pbp_2024['def_pos_team'] == team]
+        
+        # EPA per play and allowed
+        epa_per_play = team_data['EPA'].mean() if not team_data.empty else np.nan
+        epa_per_play_allowed = opponent_data['EPA'].mean() if not opponent_data.empty else np.nan
+        
+        # Offensive Success Rate
+        offensive_success_rate = (team_data[team_data['EPA'] > 0].shape[0] / len(team_data)) if not team_data.empty and len(team_data) > 0 else np.nan
+        
+        # Offensive Success Rate Allowed
+        offensive_success_rate_allowed = (opponent_data[opponent_data['EPA'] > 0].shape[0] / len(opponent_data)) if not opponent_data.empty and len(opponent_data) > 0 else np.nan
+        
+        # Passing plays and success rates
+        passing_plays = team_data[(team_data['pass'] == 1)]
+        passing_success_rate = (passing_plays[passing_plays['EPA'] > 0].shape[0] / len(passing_plays)) if not passing_plays.empty and len(passing_plays) > 0 else np.nan
+        
+        passing_plays_allowed = opponent_data[(opponent_data['pass'] == 1)]
+        passing_success_rate_allowed = (passing_plays_allowed[passing_plays_allowed['EPA'] > 0].shape[0] / len(passing_plays_allowed)) if not passing_plays_allowed.empty and len(passing_plays_allowed) > 0 else np.nan
+        
+        # Rushing plays and success rates
+        rushing_plays = team_data[(team_data['play_type'] == 'Rush') | 
+                                  (team_data['play_type'] == 'Rushing Touchdown')]
+        rushing_success_rate = (rushing_plays[rushing_plays['EPA'] > 0].shape[0] / len(rushing_plays)) if not rushing_plays.empty and len(rushing_plays) > 0 else np.nan
+        
+        rushing_plays_allowed = opponent_data[(opponent_data['play_type'] == 'Rush') | 
+                                              (opponent_data['play_type'] == 'Rushing Touchdown')]
+        rushing_success_rate_allowed = (rushing_plays_allowed[rushing_plays_allowed['EPA'] > 0].shape[0] / len(rushing_plays_allowed)) if not rushing_plays_allowed.empty and len(rushing_plays_allowed) > 0 else np.nan
+        
+        # Third down plays and success rates
+        third_down_plays = team_data[team_data['down'] == 3]
+        third_down_success_rate = (third_down_plays[third_down_plays['EPA'] > 0].shape[0] / len(third_down_plays)) if not third_down_plays.empty and len(third_down_plays) > 0 else np.nan
+        
+        third_down_plays_allowed = opponent_data[opponent_data['down'] == 3]
+        third_down_success_rate_allowed = (third_down_plays_allowed[third_down_plays_allowed['EPA'] > 0].shape[0] / len(third_down_plays_allowed)) if not third_down_plays_allowed.empty and len(third_down_plays_allowed) > 0 else np.nan
+        
+       # Points per drive
+        total_points_scored = team_data['pts_scored'].sum()
+        total_drive_numbers = team_data['drive_numbers'].sum()
+        points_per_drive = total_points_scored / total_drive_numbers if total_drive_numbers > 0 else 0
+        
+        # Points per drive allowed
+        total_points_allowed = opponent_data['pts_scored'].sum()
+        total_drive_numbers_allowed = opponent_data['drive_numbers'].sum()
+        points_per_drive_allowed = total_points_allowed / total_drive_numbers_allowed if total_drive_numbers_allowed > 0 else 0
+
+        epa_after_40 = team_data[team_data['yards_to_goal'] <= 40]['EPA'].mean()
+        epa_after_40_allowed = opponent_data[opponent_data['yards_to_goal'] <= 40]['EPA'].mean()
+        
+        #explosion rate
+        passing_explosions = passing_plays[passing_plays['EPA'] > 2.4]
+        rushing_explosions = rushing_plays[rushing_plays['EPA'] > 1.8]
+        total_explosive_plays = len(passing_explosions) + len(rushing_explosions)
+        total_plays = len(passing_plays) + len(rushing_plays)
+        explosion_rate = total_explosive_plays / total_plays if total_plays > 0 else 0
+        
+        passing_explosions_allowed = passing_plays_allowed[passing_plays_allowed['EPA'] > 2.4]
+        rushing_explosions_allowed = rushing_plays_allowed[rushing_plays_allowed['EPA'] > 1.8]
+        total_explosive_plays_allowed = len(passing_explosions_allowed) + len(rushing_explosions_allowed)
+        total_plays_allowed = len(passing_plays_allowed) + len(rushing_plays_allowed)
+        explosion_rate_allowed = total_explosive_plays_allowed / total_plays_allowed if total_plays_allowed > 0 else 0
+        
+        # Available Yards Percentage
+        team_drives = team_data.groupby('drive_id').apply(lambda x: x[['drive_start_yards_to_goal', 'drive_yards']].iloc[-1])
+        team_drives['available_yards_percentage'] = (team_drives['drive_yards'].sum() / team_drives['drive_start_yards_to_goal'].sum()) * 100
+        available_yards_percentage = team_drives['available_yards_percentage'].mean() if len(team_drives) > 0 else 0
+        
+        opponent_drives = opponent_data.groupby('drive_id').apply(lambda x: x[['drive_start_yards_to_goal', 'drive_yards']].iloc[-1])
+        opponent_drives['available_yards_percentage'] = (opponent_drives['drive_yards'].sum() / opponent_drives['drive_start_yards_to_goal'].sum()) * 100
+        available_yards_percentage_allowed = opponent_drives['available_yards_percentage'].mean() if len(opponent_drives) > 0 else 0
+        
+        #conversion rates
+        total_first_downs = team_data['firstD_by_yards'].sum() if 'firstD_by_yards' in team_data.columns else 0
+        total_scoring_plays = team_data['scoring_play'].sum() if 'scoring_play' in team_data.columns else 0
+        total_new_series = team_data['new_series'].sum() if 'new_series' in team_data.columns else 0
+        offensive_conversion_rate = (total_first_downs + total_scoring_plays) / total_new_series if total_new_series > 0 else np.nan
+
+        total_first_downs_allowed = opponent_data['firstD_by_yards'].sum() if 'firstD_by_yards' in opponent_data.columns else 0
+        total_scoring_plays_allowed = opponent_data['scoring_play'].sum() if 'scoring_play' in opponent_data.columns else 0
+        total_new_series_allowed = opponent_data['new_series'].sum() if 'new_series' in opponent_data.columns else 0
+        defensive_conversion_rate_allowed = (total_first_downs_allowed + total_scoring_plays_allowed) / total_new_series_allowed if total_new_series_allowed > 0 else np.nan
+        
+        # Early-down EPA
+        early_down_offense = team_data[team_data['down'].isin([1, 2])]
+        early_down_defense = opponent_data[opponent_data['down'].isin([1, 2])]
+
+        early_down_epa = early_down_offense['EPA'].mean() if not early_down_offense.empty else np.nan
+        early_down_epa_allowed = early_down_defense['EPA'].mean() if not early_down_defense.empty else np.nan
+        
+         # Average Starting Field Position (Offense)
+        starting_field_position_offense = team_data[team_data['drive_play_number'] == 1]['drive_start_yards_to_goal'].mean() if not team_data.empty else np.nan
+
+        # Average Starting Field Position (Defense)
+        starting_field_position_defense = opponent_data[opponent_data['drive_play_number'] == 1]['drive_start_yards_to_goal'].mean() if not opponent_data.empty else np.nan
+        
+        # Compile all stats
+        team_stats[team] = {
+            'EPA/play': epa_per_play,
+            'EPA/play allowed': epa_per_play_allowed,
+            'Offensive Success Rate': offensive_success_rate,
+            'Offensive Success Rate Allowed': offensive_success_rate_allowed,
+            'Passing Success Rate': passing_success_rate,
+            'Passing Success Rate Allowed': passing_success_rate_allowed,
+            'Rushing Success Rate': rushing_success_rate,
+            'Rushing Success Rate Allowed': rushing_success_rate_allowed,
+            'Third Down Success Rate': third_down_success_rate,
+            'Third Down Success Rate Allowed': third_down_success_rate_allowed,
+            'Points Per Drive': points_per_drive,
+            'Points Per Drive Allowed': points_per_drive_allowed,
+            'EPA after 40': epa_after_40,
+            'EPA after 40 Allowed': epa_after_40_allowed,
+            'Explosion Rate': explosion_rate,
+            'Explosion Rate Allowed': explosion_rate_allowed,
+            'Available Yards Percentage': available_yards_percentage,
+            'Available Yards Percentage Allowed': available_yards_percentage_allowed,
+            'Conversion Rate': offensive_conversion_rate,
+            'Conversion Rate Allowed': defensive_conversion_rate_allowed,
+            'Early_Down EPA/play': early_down_epa,
+            'Early-Down EPA/play Allowed': early_down_epa_allowed,
+            'Offense Avg. Field Position': starting_field_position_offense,
+            'Defense Avg. Field Position': starting_field_position_defense
+        }
+    
+    team_stats_df = pd.DataFrame.from_dict(team_stats, orient='index')
+    return team_stats_df
+
+team_stats_2024 = fbs_2024_stats(pbp_2024, fbs_teams)
+
+def get_team_stats_and_rankings(team_stats_df, team):
+    # Define the stats where a lower value is better
+    def_stats = [
+        'EPA/play allowed',
+        'Passing Success Rate Allowed',
+        'Rushing Success Rate Allowed',
+        'Third Down Success Rate Allowed',
+        'Points Per Drive Allowed',
+        'EPA after 40 Allowed',
+        'Explosion Rate Allowed',
+        'Available Yards Percentage Allowed',
+        'Offensive Success Rate Allowed',
+        'Conversion Rate Allowed',
+        'Early-Down EPA/play Allowed',
+        'Offense Avg. Field Position'
+    ]
+    
+    # Get the specific team's stats
+    team_stats = team_stats_df.loc[team]
+    
+    # Calculate the rankings for each stat
+    rankings = team_stats_df.rank(ascending=False)  # Higher rank is better
+    
+    # Adjust rankings for "allowed" stats
+    for stat in def_stats:
+        if stat in team_stats_df.columns:
+            rankings[stat] = len(team_stats_df) + 1 - rankings[stat]
+    
+    # Get the team's rankings
+    team_rankings = rankings.loc[team]
+    
+    # Combine the stats with their rankings
+    team_stats_with_rankings = pd.DataFrame({
+        'Statistic': team_stats,
+        'Ranking': team_rankings
+    })
+    
+    return team_stats_with_rankings
+
+team_stats_and_rankings = get_team_stats_and_rankings(team_stats_2024, 'Indiana')
+print(team_stats_and_rankings)
