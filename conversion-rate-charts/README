@@ -1,1 +1,5 @@
+Conversion Rate Charts
 
+The conversion rate charts were created to show how each new series of downs ends for each team, whether that be a touchdown, a first down, a punt, a field goal attempt, or a turnover. The end result is a percentage of series for each outcome, and the list of teams is ranked by conversion rate, which is the percentage of series that end in a positive outcome (touchdown, first down, field goal attempt). The bars are color coded by outcome with the positive outcomes being shades of green and negative outcomes being shades of purple. 
+
+This visualization’s data was calculated (using cfbfastr) and organized in Python within a Jupyter Notebook environment. The chart was produced using matplotlib. It was updated weekly.
