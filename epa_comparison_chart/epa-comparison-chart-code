@@ -1,0 +1,185 @@
+import pandas as pd
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import matplotlib.pyplot as plt
+
+#collect all 2023 plays, take out spec. teams plays
+pbp_for_epa = pbp_2024[pbp_2024['year'] == 2024]
+cols = ['week', 
+        'game_id', 
+        'home', 
+        'away', 
+        'pos_team',
+        'def_pos_team',
+        'EPA',
+        'def_EPA',
+        'total_home_EPA', 
+        'total_away_EPA', 
+        'home_EPA_rush',	
+        'away_EPA_rush', 
+        'home_EPA_pass', 
+        'away_EPA_pass',
+       'success',
+       'down',
+       'rz_play',
+       'play_type',
+       'rush',
+       'pass',
+       'offense_conference',
+       'defense_conference']
+epa_all_2024 = pbp_for_epa[cols]
+epa_all_2024 = epa_all_2024[~epa_all_2024['play_type'].isin(['Kickoff', 'Punt', 'Field Goal'])]
+conferences_to_include = [
+    'Big 12', 'Pac-12', 'SEC', 'ACC', 'Mid-American', 
+    'Sun Belt', 'American Athletic', 'Mountain West', 
+    'Big Ten', 'Conference USA', 'FBS Independents'
+]
+epa_all_2024 = epa_all_2024[
+    (pbp_2024['offense_conference'].isin(conferences_to_include)) | 
+    (pbp_2024['defense_conference'].isin(conferences_to_include))
+]
+
+# Define the Big Ten teams.
+big_ten_teams = [
+    "Illinois", "Indiana", "Iowa", "Maryland", "Michigan", "Michigan State", 
+    "Minnesota", "Nebraska", "Northwestern", "Ohio State", "Oregon", 
+    "Penn State", "Purdue", "Rutgers", "UCLA", "USC", "Washington", "Wisconsin"
+]
+
+# Define the play types to exclude.
+excluded_play_types = [
+    'Kickoff', 'Kick Return (Offense)', 'Blocked Punt Touchdown', 'End Period',
+    'End of Half', 'End of Game', 'End of Regulation', 'Blocked Field Goal',
+    'Blocked Punt', 'Punt Return Touchdown', 'Kickoff Return Touchdown',
+    'Kickoff Team Fumble Recovery', 'Blocked Field Goal Touchdown',
+    'Missed Field Goal Return', 'Uncategorized', 'placeholder'
+]
+
+# Filter the DataFrame to exclude specified play types and include only Big Ten teams.
+filtered_df = epa_all_2024[
+    ~epa_all_2024['play_type'].isin(excluded_play_types) & (
+        epa_all_2024['pos_team'].isin(big_ten_teams) | 
+        epa_all_2024['def_pos_team'].isin(big_ten_teams)
+    )
+]
+
+# Create a new DataFrame for the results.
+big_ten_epa = pd.DataFrame()
+
+# Average 'EPA' when the team is the 'pos_team'.
+big_ten_epa['Off. EPA/play'] = filtered_df.groupby('pos_team')['EPA'].mean().reindex(big_ten_teams)
+
+# Average 'def_EPA' when the team is the 'def_pos_team'.
+big_ten_epa['Def. EPA/play'] = filtered_df.groupby('def_pos_team')['def_EPA'].mean().reindex(big_ten_teams)
+
+# Reset index to have a clean DataFrame.
+big_ten_epa.reset_index(inplace=True)
+
+# Rename the index column to 'Team'.
+big_ten_epa.rename(columns={'index': 'Team'}, inplace=True)
+
+# Filter the DataFrame to exclude specified play types and include only non-Big Ten teams.
+filtered_non_big_ten_df = epa_all_2024[
+    ~epa_all_2024['play_type'].isin(excluded_play_types) & ~(
+        epa_all_2024['pos_team'].isin(big_ten_teams) | 
+        epa_all_2024['def_pos_team'].isin(big_ten_teams)
+    )
+]
+
+# Get the list of non-Big Ten teams.
+non_big_ten_teams = sorted(
+    set(filtered_non_big_ten_df['pos_team']).union(set(filtered_non_big_ten_df['def_pos_team']))
+)
+
+# Filter for FBS teams only.
+non_big_ten_fbs_teams = [team for team in non_big_ten_teams if team in fbs_teams]
+
+# Filter the DataFrame again to include only matchups involving FBS teams.
+filtered_non_big_ten_fbs_df = filtered_non_big_ten_df[
+    (filtered_non_big_ten_df['pos_team'].isin(non_big_ten_fbs_teams)) &
+    (filtered_non_big_ten_df['def_pos_team'].isin(non_big_ten_fbs_teams))
+]
+
+# Create a new DataFrame for the results.
+non_big_ten_epa = pd.DataFrame()
+
+# Average 'EPA' when the team is the 'pos_team'.
+non_big_ten_epa['Off. EPA/play'] = filtered_non_big_ten_fbs_df.groupby('pos_team')['EPA'].mean().reindex(non_big_ten_fbs_teams)
+
+# Average 'def_EPA' when the team is the 'def_pos_team'.
+non_big_ten_epa['Def. EPA/play'] = filtered_non_big_ten_fbs_df.groupby('def_pos_team')['def_EPA'].mean().reindex(non_big_ten_fbs_teams)
+
+# Reset index to have a clean DataFrame.
+non_big_ten_epa.reset_index(inplace=True)
+
+# Rename the index column to 'Team'.
+non_big_ten_epa.rename(columns={'index': 'Team'}, inplace=True)
+
+non_big_ten_epa_sorted = non_big_ten_epa.sort_values(by='Def. EPA/play', ascending=False)
+
+# Load team logos
+def get_team_logo(team_name):
+    path = f'{team_name}.png'  # Ensure the file names match the team names in your dataset
+    return plt.imread(path)
+
+# Load additional logo
+def get_additional_logo():
+    path = 'bsb.png'  # Path to your additional logo
+    return plt.imread(path)
+
+# Create the plot
+weekly_b10_epa_fig, ax = plt.subplots(figsize=(10, 8))
+
+# Set the limits for the quadrants
+ax.axhline(0, color='black', linewidth=0.8)
+ax.axvline(0, color='black', linewidth=0.8)
+
+# Set the x and y limits to show all four quadrants
+x_min = min(big_ten_epa['Off. EPA/play'].min(), non_big_ten_epa['Off. EPA/play'].min()) - 0.02
+x_max = max(big_ten_epa['Off. EPA/play'].max(), non_big_ten_epa['Off. EPA/play'].max()) + 0.02
+y_min = min(big_ten_epa['Def. EPA/play'].min(), non_big_ten_epa['Def. EPA/play'].min()) - 0.02
+y_max = max(big_ten_epa['Def. EPA/play'].max(), non_big_ten_epa['Def. EPA/play'].max()) + 0.02
+
+ax.set_xlim(x_min, x_max)
+ax.set_ylim(y_min, y_max)
+
+# Plot non-Big Ten teams as black dots (alpha=0.5)
+ax.scatter(
+    non_big_ten_epa['Off. EPA/play'], 
+    non_big_ten_epa['Def. EPA/play'], 
+    color='black', 
+    alpha=0.3, 
+    s=10,  # Size of the dots
+    zorder=1  # Behind the logos
+)
+
+# Plotting each Big Ten team with their logo
+for i, row in big_ten_epa.iterrows():
+    img = get_team_logo(row['pos_team'])
+    imagebox = OffsetImage(img, zoom=0.05)  # Adjust the zoom to fit the size
+    ab = AnnotationBbox(imagebox, (row['Off. EPA/play'], row['Def. EPA/play']), frameon=False, zorder=2)  # On top of the dots
+    ax.add_artist(ab)
+
+# Add additional logo to the figure
+logo_img = get_additional_logo()
+logo_imagebox = OffsetImage(logo_img, zoom=0.07, alpha=0.5)  # Adjust zoom as needed
+logo_ab = AnnotationBbox(logo_imagebox, (0.95, 1.06),  # Positioning the logo; adjust as needed
+                         xycoords='axes fraction',  # Use axes fraction for positioning
+                         frameon=False,
+                         zorder=0)
+ax.add_artist(logo_ab)
+
+# Set labels and title
+ax.set_xlabel('Offensive EPA/play', fontsize=14)
+ax.set_ylabel('Defensive EPA/play', fontsize=14)
+ax.set_title('Big Ten 2024 Team EPA/play, Offense v. Defense', fontsize=16, pad=30)
+
+# Show grid
+ax.grid(True, linestyle='--', alpha=0.6)
+
+# Add source text
+plt.text(0.02, 0.22, 'Data Source: @cfbfastr | Design: Bite-Sized Bison', 
+         ha='center', va='center', fontsize=10, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+
+# Show the plot
+plt.show()
+
