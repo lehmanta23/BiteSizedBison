@@ -1,0 +1,223 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
+
+# Filtering plays for 2023 and excluding specific special teams plays
+pbp_2023 = pbp[pbp['year'] == 2023]
+cols = [
+    'week', 'game_id', 'home', 'away', 'pos_team', 'def_pos_team', 'EPA',
+    'total_home_EPA', 'total_away_EPA', 'home_EPA_rush', 'away_EPA_rush',
+    'home_EPA_pass', 'away_EPA_pass', 'success', 'down', 'rz_play',
+    'play_type', 'rush', 'pass', 'offense_conference', 'defense_conference'
+]
+epa_all = pbp_2023[cols]
+
+# Remove specified special teams and non-standard plays
+special_teams_plays = [
+    'Kickoff', 'Kick Return (Offense)', 'Blocked Punt Touchdown', 'End Period',
+    'End of Half', 'End of Game', 'End of Regulation', 'Blocked Field Goal',
+    'Blocked Punt', 'Punt Return Touchdown', 'Kickoff Return Touchdown',
+    'Kickoff Team Fumble Recovery', 'Blocked Field Goal Touchdown',
+    'Missed Field Goal Return'
+]
+epa_all = epa_all[~epa_all['play_type'].isin(special_teams_plays)]
+
+# Filter by conferences
+conferences_to_include = [
+    'Big 12', 'Pac-12', 'SEC', 'ACC', 'Mid-American', 
+    'Sun Belt', 'American Athletic', 'Mountain West', 
+    'Big Ten', 'Conference USA', 'FBS Independents'
+]
+epa_all = epa_all[
+    (epa_all['offense_conference'].isin(conferences_to_include)) | 
+    (epa_all['defense_conference'].isin(conferences_to_include))
+]
+
+# Function to calculate stats by week for each team
+def calculate_team_week_stats(group):
+    total_plays = len(group[~group['play_type'].isin(['Penalty', 'Timeout'])])
+    passes = group['pass'].sum()
+    rushes = group['rush'].sum()
+    ed_plays = group[group['down'].isin([1, 2])].shape[0]
+    td_plays = group[group['down'] == 3].shape[0]
+    rz_plays = group[group['rz_play'] == 1].shape[0]
+
+    # Calculate stats
+    epa_play = group['EPA'].sum() / total_plays if total_plays else 0
+    epa_pass = group[group['pass'] == 1]['EPA'].sum() / passes if passes else 0
+    epa_rush = group[group['rush'] == 1]['EPA'].sum() / rushes if rushes else 0
+    success_rate = (group[group['EPA'] > 0].shape[0] / total_plays * 100) if total_plays else 0
+    ed_epa_play = group[group['down'].isin([1, 2])]['EPA'].sum() / ed_plays if ed_plays else 0
+    td_success = group[(group['down'] == 3) & (group['EPA'] > 0)].shape[0] / td_plays * 100 if td_plays else 0
+    rz_success = group[(group['rz_play'] == 1) & (group['EPA'] > 0)].shape[0] / rz_plays * 100 if rz_plays else 0
+
+    return pd.Series({
+        'Team': group['pos_team'].iloc[0],
+        'Week': group['week'].iloc[0],
+        'EPA/play': epa_play,
+        'EPA/pass': epa_pass,
+        'EPA/rush': epa_rush,
+        'Success Rate': success_rate,
+        'Early-Down EPA': ed_epa_play,
+        'Third-Down Success Rate': td_success,
+        'Red Zone Success Rate': rz_success,
+        'Off. Conf.': group['offense_conference'].iloc[0],
+        'Def. Conf.': group['defense_conference'].iloc[0]
+    })
+
+# Group by team and week, then apply the calculation function
+team_week_stats = epa_all.groupby(['pos_team', 'week']).apply(calculate_team_week_stats).reset_index(drop=True)
+
+# Filter the dataframe to include only teams in fbs_teams
+team_week_stats = team_week_stats[team_week_stats['Team'].isin(fbs_teams)]
+
+
+# Select the necessary columns
+cols = [
+    'game_id', 'pos_team', 'def_pos_team', 'EPA', 'success', 'down', 'rz_play',
+    'play_type', 'rush', 'pass', 'offense_conference', 'defense_conference'
+]
+epa_all = wk15[cols]
+
+# Remove specified special teams and non-standard plays
+special_teams_plays = [
+    'Kickoff', 'Kick Return (Offense)', 'Blocked Punt Touchdown', 'End Period',
+    'End of Half', 'End of Game', 'End of Regulation', 'Blocked Field Goal',
+    'Blocked Punt', 'Punt Return Touchdown', 'Kickoff Return Touchdown',
+    'Kickoff Team Fumble Recovery', 'Blocked Field Goal Touchdown',
+    'Missed Field Goal Return'
+]
+epa_all = epa_all[~epa_all['play_type'].isin(special_teams_plays)]
+
+def calculate_team_week_stats_comparison(group):
+    total_plays = len(group[~group['play_type'].isin(['Penalty', 'Timeout'])])
+    passes = group['pass'].sum()
+    rushes = group['rush'].sum()
+    ed_plays = group[group['down'].isin([1, 2])].shape[0]
+    td_plays = group[group['down'] == 3].shape[0]
+    rz_plays = group[group['rz_play'] == 1].shape[0]
+
+    # Calculate stats
+    epa_play = group['EPA'].sum() / total_plays if total_plays else 0
+    epa_pass = group[group['pass'] == 1]['EPA'].sum() / passes if passes else 0
+    epa_rush = group[group['rush'] == 1]['EPA'].sum() / rushes if rushes else 0
+    success_rate = (group[group['EPA'] > 0].shape[0] / total_plays * 100) if total_plays else 0
+    ed_epa_play = group[group['down'].isin([1, 2])]['EPA'].sum() / ed_plays if ed_plays else 0
+    td_success = group[(group['down'] == 3) & (group['EPA'] > 0)].shape[0] / td_plays * 100 if td_plays else 0
+    rz_success = group[(group['rz_play'] == 1) & (group['EPA'] > 0)].shape[0] / rz_plays * 100 if rz_plays else 0
+
+    return pd.Series({
+        'Team': group['pos_team'].iloc[0],
+        'EPA/play': epa_play,
+        'EPA/pass': epa_pass,
+        'EPA/rush': epa_rush,
+        'Success Rate': success_rate,
+        'Early-Down EPA': ed_epa_play,
+        'Third-Down Success Rate': td_success,
+        'Red Zone Success Rate': rz_success,
+    })
+
+# Group by team and week, then apply the calculation function
+wk15_epa_stats = epa_all.groupby(['pos_team']).apply(calculate_team_week_stats_comparison).reset_index(drop=True)
+
+# Select relevant columns
+variables = ['EPA/play', 'EPA/pass', 'EPA/rush', 'Success Rate',
+             'Early-Down EPA', 'Third-Down Success Rate', 'Red Zone Success Rate']
+
+# Initialize an empty DataFrame for the table
+table_df = pd.DataFrame(index=variables)
+
+# Calculate percentiles for each variable in wk9_epa_stats based on the team_week_stats dataframe
+for variable in variables:
+    for team in wk15_epa_stats['Team'].unique():
+        team_value = wk15_epa_stats[wk15_epa_stats['Team'] == team][variable].values[0]
+        
+        # Calculate the percentile for the team value against the entire team_week_stats dataframe
+        percentile_value = (team_week_stats[variable] < team_value).mean() * 100  # Percentile calculation
+        
+        # Check if the variable is a rate and format accordingly
+        if variable in ['Success Rate', 'Third-Down Success Rate', 'Red Zone Success Rate']:
+            value_with_percentile = f"{team_value:.1f}% ({percentile_value:.0f}%)"
+        else:
+            value_with_percentile = f"{team_value:.3f} ({percentile_value:.0f}%)"
+        
+        # Add the value with percentile to the table DataFrame
+        table_df[team] = table_df.get(team, pd.Series(index=variables))
+        table_df.at[variable, team] = value_with_percentile
+
+# Add a column for the variable names
+table_df.insert(0, 'Variable', variables)
+
+# Create the table figure
+epa_recap_fig, ax = plt.subplots(figsize=(8, 6))
+ax.axis('off')
+
+# Use the 'PRGn' colormap
+cmap = plt.get_cmap('PRGn')
+
+# Create the table with an empty header for the 'Variable' column
+col_labels = [''] + list(table_df.columns[1:])  # Set the first column header to empty
+
+# Create the table
+table = ax.table(cellText=table_df.values, colLabels=col_labels, cellLoc='center', loc='center')
+
+# Function to check if color is dark
+def is_dark_color(color):
+    r, g, b, _ = color
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 0.5
+
+# Apply colormap and adjust text color
+for i, row in enumerate(table_df.index):
+    for j, col in enumerate(table_df.columns[1:]):  # Skip the 'Variable' column for col index
+        value = table_df.at[row, col]
+        percentile = int(value.split('(')[1].replace('%', '').replace(')', ''))
+        color = cmap(percentile / 100)
+        table[(i + 1, j + 1)].set_facecolor(color)
+        
+        # Adjust text color based on cell background color
+        text_color = 'white' if is_dark_color(color) else 'black'
+        table[(i + 1, j + 1)].set_text_props(color=text_color)
+
+# Align text in the 'Variable' column to the right
+variable_col_index = 0  # Update if needed
+for i, row in enumerate(table_df.index):
+    table[(i + 1, variable_col_index)].set_text_props(ha='right')
+
+# Adjust table appearance
+table.auto_set_font_size(False)
+table.set_fontsize(10)
+table.scale(0.75, 2.2)  # Adjust cell size
+
+# Add white borders to cells
+for key, cell in table._cells.items():
+    cell.set_edgecolor('white')  # Set border color to white
+    cell.set_linewidth(1)  # Adjust border thickness as needed
+
+# Define the add_logo function
+def add_logo(fig, image_path, loc, zoom):
+    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+    import matplotlib.image as mpimg
+    
+    # Load image
+    image = mpimg.imread(image_path)
+    imagebox = OffsetImage(image, zoom=zoom, zorder=0)
+    ab = AnnotationBbox(imagebox, loc, frameon=False, pad=0)
+    ax = fig.add_subplot(111, frame_on=False)
+    ax.add_artist(ab)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+
+# Apply logos to the figure
+add_logo(epa_recap_fig, 'Indiana.png', loc=(0.5, 0.87), zoom=0.08)  # Adjust location and zoom as needed
+add_logo(epa_recap_fig, 'Notre Dame.png', loc=(0.75, 0.86), zoom=0.08)  # Adjust location and zoom as needed
+add_logo(epa_recap_fig, 'bsb.png', loc=(0.28, 0.83), zoom=0.05)
+
+plt.text(0.875, 0.03, 'Data Source: @cfbfastr | Design: Bite-Sized Bison', 
+         ha='right', va='center', fontsize=8, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+plt.text(0.875, 0.13, 'Percentiles represent each value within all 2023 FBS performances.', 
+         ha='right', va='center', fontsize=9, color='#36454F', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+plt.text(0.875, 0.095, 'EPA = Estimated Points Added; Success Rate includes plays with EPA > 0.', 
+         ha='right', va='center', fontsize=9, color='#36454F', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+
+plt.show()
