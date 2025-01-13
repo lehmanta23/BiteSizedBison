@@ -1,1 +1,5 @@
+Offensive Line PFF Distributions Charts
 
+The offensive line grades distribution chart was created to show how effective each Big Ten offensive line unit was graded to be, according to Pro Football Focus. If you have a subscription to PFF, it is easy to see individual grades for linemen, but it’s difficult to visualize how each unit (the starters along the line) perform and how that ranks. This simply plots the minimum to the maximum, calculates the average, and plots the team’s logo at the average grade. This is also where the distributions are sorted. 
+
+This visualization’s data was calculated (using Pro Football Focus data) and organized in Python within a Jupyter Notebook environment. The chart was produced using matplotlib. It was updated weekly.
