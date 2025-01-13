@@ -1,0 +1,349 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import matplotlib.image as mpimg
+
+def calculate_second_chance_points(pbp, team, team_dict, team_box):
+    # Skip if the team is not in team_dict
+    if team not in team_dict:
+        print(f"Skipping {team} as it is not in team_dict.")
+        return 0, 0  # Default values for skipped teams
+    
+    team_id = team_dict[team]
+    
+    # Filter plays for the team
+    team_pbp = pbp[pbp['team_id'] == team_id]
+    
+    # Find rows where 'type_text' contains "Offensive Rebound"
+    offensive_rebounds = team_pbp[team_pbp['type_text'] == 'Offensive Rebound']
+    
+    # Add the score from the next row for each offensive rebound
+    second_chance_points = 0
+    for idx in offensive_rebounds.index:
+        if idx + 1 in pbp.index:  # Ensure the next row exists
+            second_chance_points += pbp.loc[idx + 1, 'score_value']
+    
+    # Normalize by the number of games (length of team_box)
+    second_chance_points_team_per_game = second_chance_points / len(team_box['game_id'])
+    
+    # Repeat for the opponent
+    opponent_pbp = pbp[pbp['team_id'] != team_id]
+    offensive_rebounds_opponent = opponent_pbp[opponent_pbp['type_text'] == 'Offensive Rebound']
+    
+    second_chance_points_allowed = 0
+    for idx in offensive_rebounds_opponent.index:
+        if idx + 1 in pbp.index:  # Ensure the next row exists
+            second_chance_points_allowed += pbp.loc[idx + 1, 'score_value']
+    
+    second_chance_points_allowed_per_game = second_chance_points_allowed / len(team_box)
+    
+    return second_chance_points_team_per_game, second_chance_points_allowed_per_game
+
+
+def layup_dunk_rate(pbp, team):
+    # Get team_id from dictionary
+    team_id = team_dict[team]
+    
+    # Filter play-by-play data for the given team
+    team_pbp = pbp[pbp['team_id'] == team_id]
+    
+    # Filter for layups and dunks
+    layup_dunk_plays = team_pbp[team_pbp['type_id'].isin([572, 574])]
+    
+    # Calculate made and attempted counts
+    layup_dunk_made = layup_dunk_plays[layup_dunk_plays['scoring_play'] == True].shape[0]
+    layup_dunk_attempted = layup_dunk_plays.shape[0]
+    
+    # Handle cases where no attempts were made
+    if layup_dunk_attempted == 0:
+        return 0
+    
+    # Calculate the layup/dunk rate
+    layup_dunk_rate = (layup_dunk_made / layup_dunk_attempted) * 100
+    return layup_dunk_rate
+
+
+def layup_dunk_rate_allowed(pbp, team):
+    # Get team_id from dictionary
+    team_id = team_dict[team]
+    
+    # Filter play-by-play data for opponents
+    opponent_pbp = pbp[pbp['team_id'] != team_id]
+    
+    # Filter for layups and dunks
+    layup_dunk_plays = opponent_pbp[opponent_pbp['type_id'].isin([572, 574])]
+    
+    # Calculate made and attempted counts
+    layup_dunk_made = layup_dunk_plays[layup_dunk_plays['scoring_play'] == True].shape[0]
+    layup_dunk_attempted = layup_dunk_plays.shape[0]
+    
+    # Handle cases where no attempts were made
+    if layup_dunk_attempted == 0:
+        return 0
+    
+    # Calculate the layup/dunk rate
+    layup_dunk_rate_allowed = (layup_dunk_made / layup_dunk_attempted) * 100
+    return layup_dunk_rate_allowed
+
+
+def preview_data(pbp, team_box, opponent_box, team):
+    minutes_played = len(team_box['game_id'])*40
+    opponent_minutes_played = len(opponent_box['game_id'])*40
+    possessions = team_box['field_goals_attempted'].sum() - team_box['offensive_rebounds'].sum() + team_box['turnovers'].sum() + (0.475*team_box['free_throws_attempted'].sum())
+    opponent_possessions = opponent_box['field_goals_attempted'].sum() - opponent_box['offensive_rebounds'].sum() + opponent_box['turnovers'].sum() + (0.475*opponent_box['free_throws_attempted'].sum())
+    
+    points_from_threes = ((team_box['three_point_field_goals_made'].sum()*3) / team_box['team_score'].sum()) * 100
+    points_from_twos = (((team_box['field_goals_made'].sum()-team_box['three_point_field_goals_made'].sum())*2) / team_box['team_score'].sum()) * 100
+    points_from_free_throws = (team_box['free_throws_made'].sum() / team_box['team_score'].sum()) * 100
+    assist_rate = (team_box['assists'].sum() / possessions) * 100
+    turnover_rate = (team_box['turnovers'].sum() / possessions) * 100
+    points_per_possession = team_box['team_score'].sum() / possessions
+    tempo = possessions / (minutes_played/40)
+    block_rate = (team_box['blocks'].sum() / opponent_possessions) * 100
+    fouls_drawn_rate = opponent_box['fouls'].sum() / (minutes_played/40)
+    free_throw_rate = (team_box['free_throws_attempted'].sum() / team_box['field_goals_attempted'].sum()) * 100
+    effective_fg_percentage = ((team_box['field_goals_made'].sum()+0.5*team_box['three_point_field_goals_made'].sum()) / team_box['field_goals_attempted'].sum()) * 100
+    three_pt_rate = (team_box['three_point_field_goals_attempted'].sum() / team_box['field_goals_attempted'].sum()) * 100
+    layup_dunk_percentage = layup_dunk_rate(pbp, team)
+    three_pt_fg = (team_box['three_point_field_goals_made'].sum() / team_box['three_point_field_goals_attempted'].sum()) * 100
+    off_rebound_rate = (team_box['offensive_rebounds'].sum() / (team_box['offensive_rebounds'].sum()+opponent_box['defensive_rebounds'].sum())) * 100
+    
+    points_from_threes_allowed = (((opponent_box['three_point_field_goals_made'].sum())*3) / opponent_box['team_score'].sum()) * 100
+    points_from_twos_allowed = (((opponent_box['field_goals_made'].sum()-opponent_box['three_point_field_goals_made'].sum())*2) / opponent_box['team_score'].sum()) * 100
+    points_from_free_throws_allowed = (opponent_box['free_throws_made'].sum() / opponent_box['team_score'].sum()) * 100
+    assist_rate_allowed = (opponent_box['assists'].sum() / opponent_possessions) * 100
+    turnover_rate_allowed = (opponent_box['turnovers'].sum() / opponent_possessions) * 100
+    points_per_possession_allowed = opponent_box['team_score'].sum() / opponent_possessions
+    tempo_allowed = opponent_possessions / (minutes_played/40)
+    block_rate_allowed = (opponent_box['blocks'].sum() / possessions) * 100
+    fouls_drawn_rate_allowed = team_box['fouls'].sum() / (minutes_played/40)
+    free_throw_rate_allowed = (opponent_box['free_throws_attempted'].sum() / opponent_box['field_goals_attempted'].sum()) * 100
+    effective_fg_percentage_allowed = ((opponent_box['field_goals_made'].sum()+0.5*opponent_box['three_point_field_goals_made'].sum()) / opponent_box['field_goals_attempted'].sum()) * 100
+    three_pt_rate_allowed = (opponent_box['three_point_field_goals_attempted'].sum() / opponent_box['field_goals_attempted'].sum()) * 100
+    layup_dunk_percentage_allowed = layup_dunk_rate_allowed(pbp, team)
+    three_pt_fg_allowed = (opponent_box['three_point_field_goals_made'].sum() / opponent_box['three_point_field_goals_attempted'].sum()) * 100
+    off_rebound_rate_allowed = (opponent_box['offensive_rebounds'].sum() / (opponent_box['offensive_rebounds'].sum()+team_box['defensive_rebounds'].sum()))
+    
+    avg_possession_length = (len(team_box['game_id']) * 2400) / possessions
+    avg_possession_length_allowed = (len(opponent_box['game_id']) * 2400) / opponent_possessions
+    second_chance_points, second_chance_points_allowed = calculate_second_chance_points(pbp, team, team_dict, team_box)
+    
+# Assign to stats dictionary
+    stats = {
+        'PPP': points_per_possession,
+        'PPP Allowed': points_per_possession_allowed,
+        'Points from 3': points_from_threes,
+        'Points from 3 Allowed': points_from_threes_allowed,
+        'Points from 2': points_from_twos,
+        'Points from 2 Allowed': points_from_twos_allowed,
+        'Points from FTs': points_from_free_throws,
+        'Points from FTs Allowed': points_from_free_throws_allowed,
+        'Assist Rate': assist_rate,
+        'Assist Rate Allowed': assist_rate_allowed,
+        'Turnover Rate Allowed': turnover_rate,
+        'Turnover Rate Forced': turnover_rate_allowed,
+        'Tempo': tempo,
+        'Tempo Against': tempo_allowed,
+        'Block Rate': block_rate,
+        'Block Rate Allowed': block_rate_allowed,
+        'Free Throw Rate': free_throw_rate,
+        'Free Throw Rate Allowed': free_throw_rate_allowed,
+        'Effective FG%': effective_fg_percentage,
+        'Effective FG% Allowed': effective_fg_percentage_allowed,
+        'Off. Rebound%': off_rebound_rate,
+        'Off. Rebound% Allowed': off_rebound_rate_allowed,
+        '3-Pt Rate': three_pt_rate,
+        '3-Pt Rate Allowed': three_pt_rate_allowed,
+        'Layup/Dunk%': layup_dunk_percentage,
+        'Layup/Dunk% Allowed': layup_dunk_percentage_allowed,
+        '3-Pt%': three_pt_fg,
+        '3-Pt% Allowed': three_pt_fg_allowed
+    }
+
+    # Convert to DataFrame
+    result_df = pd.DataFrame([stats], index=[team])
+
+    return result_df
+
+def apply_preview_calculations(pbp, team_box, div1_teams):
+    # Initialize an empty DataFrame to store results for all teams
+    all_teams_preview_df = pd.DataFrame()
+
+    for team in div1_teams:
+        try:
+            # Filter the pbp and team box data for the current team
+            team_pbp = pbp[(pbp['home_team_name'] == team) | (pbp['away_team_name'] == team)]
+            team_box_scores = team_box[team_box['team_location'] == team]
+            opponent_box_scores = team_box[team_box['opponent_team_location'] == team]
+
+            # Call the preview_data function for the current team
+            team_data = preview_data(team_pbp, team_box_scores, opponent_box_scores, team)
+
+            # Add a column for the team name
+            team_data['team_name'] = team
+
+            # Append the current team's data to the result DataFrame
+            all_teams_preview_df = pd.concat([all_teams_preview_df, team_data])
+        except Exception as e:
+            print(f"Error processing team {team}: {e}")
+
+    # Do not reset the index; keep original indices intact for traceability
+    return all_teams_preview_df
+
+# Example usage
+team_preview_df = apply_preview_calculations(pbp, team_box, div1_teams)
+
+# Save the final DataFrame to a CSV file
+team_preview_df.to_csv('all_teams_preview_with_names.csv', index=False)
+
+def calculate_percentile(team_data, all_teams_data, column, reverse=False):
+    # Rank the column, higher rank is better unless reverse is True
+    if reverse:
+        return (all_teams_data[column].rank(ascending=False, pct=True)[all_teams_data[column] == team_data[column]].values[0]) * 100
+    else:
+        return (all_teams_data[column].rank(pct=True)[all_teams_data[column] == team_data[column]].values[0]) * 100
+
+def create_preview_game(team_preview_df, team1, team2):
+    # Filter the rows for the two teams
+    team1_data = team_preview_df[team_preview_df['team_name'] == team1]
+    team2_data = team_preview_df[team_preview_df['team_name'] == team2]
+    
+    # Initialize an empty DataFrame for the preview game
+    preview_game = pd.DataFrame()
+
+    # Combine the data for both teams
+    preview_game = pd.concat([team1_data, team2_data])
+
+    # Calculate percentiles for each team's data and add as new columns
+    for column in preview_game.columns:
+        if column != 'team_name':  # Skip the 'team_name' column
+            # Determine if the column represents a defensive stat
+            reverse_percentile = 'allowed' in column.lower()
+            
+            # Calculate percentile for team 1
+            preview_game[f'{column} %'] = preview_game.apply(
+                lambda row: calculate_percentile(row, team_preview_df, column, reverse_percentile) 
+                if row['team_name'] == team1 else None, axis=1)
+            
+            # Calculate percentile for team 2
+            preview_game[f'{column} %'] = preview_game.apply(
+                lambda row: calculate_percentile(row, team_preview_df, column, reverse_percentile) 
+                if row['team_name'] == team2 else row[f'{column} %'], axis=1)
+
+    # Reset index for the preview game DataFrame
+    preview_game.reset_index(drop=True, inplace=True)
+    
+    return preview_game
+
+# Example usage: Selecting two teams (e.g., 'Indiana' and 'Purdue')
+team1 = 'Indiana'
+team2 = opponent
+preview_game = create_preview_game(team_preview_df, team1, team2)
+
+# Save the preview game DataFrame to a CSV file
+preview_game.to_csv('preview_game.csv', index=False)
+
+# Define the stat groups with the original names (keep the '%' signs and 'Allowed'/'Forced')
+offensive_stats = [
+    'PPP %', 'Tempo %', 'Effective FG% %', 'Points from FTs %', 'Points from 2 %', 'Points from 3 %',  
+    '3-Pt Rate %', '3-Pt% %', 'Layup/Dunk% %', 'Free Throw Rate %', 'Assist Rate %', 'Turnover Rate Allowed %', 'Block Rate %', 
+    'Off. Rebound% %'
+]
+
+defensive_stats = [
+    'PPP Allowed %', 'Tempo Against %', 'Effective FG% Allowed %', 'Points from FTs Allowed %', 
+    'Points from 2 Allowed %', 'Points from 3 Allowed %', '3-Pt Rate Allowed %', '3-Pt% Allowed %', 
+    'Layup/Dunk% Allowed %', 'Free Throw Rate Allowed %', 'Assist Rate Allowed %', 'Turnover Rate Forced %', 
+    'Block Rate Allowed %', 'Off. Rebound% Allowed %'
+]
+
+# Define the renaming function
+def rename_labels(labels):
+    renamed_labels = []
+    for label in labels:
+        # Remove percentage signs and 'allowed'/'forced' from defensive stats
+        label = label.replace(' %', '').replace(' Allowed', '').replace(' Forced', '').replace(' Against', '')
+        renamed_labels.append(label)
+    return renamed_labels
+
+# Extract the relevant data for Team 1 and Team 2
+team1_offensive = preview_game[preview_game['team_name'] == 'Indiana'][offensive_stats].values.flatten()
+team2_defensive = preview_game[preview_game['team_name'] == opponent][defensive_stats].values.flatten()
+
+team1_defensive = preview_game[preview_game['team_name'] == 'Indiana'][defensive_stats].values.flatten()
+team2_offensive = preview_game[preview_game['team_name'] == opponent][offensive_stats].values.flatten()
+
+# Function to create radar chart
+def create_radar_chart(team1_values, team2_values, labels, title):
+    # Rename the labels
+    renamed_labels = rename_labels(labels)
+
+    # Number of variables
+    num_vars = len(renamed_labels)
+
+    # Compute angle of each axis
+    angles = np.linspace(0, 2 * np.pi, num_vars, endpoint=False).tolist()
+
+    # Make the plot circular
+    team1_values = np.concatenate((team1_values, [team1_values[0]]))
+    team2_values = np.concatenate((team2_values, [team2_values[0]]))
+    angles += angles[:1]
+
+    fig, ax = plt.subplots(figsize=(6, 6), dpi=100, subplot_kw=dict(polar=True))
+
+    # Plot data
+    ax.plot(angles, team1_values, color='red', linewidth=1, label="Indiana")
+    ax.plot(angles, team2_values, color='black', linewidth=1, label=f"{opponent}")
+
+    # Fill the area
+    ax.fill(angles, team1_values, color='red', alpha=0.25)
+    ax.fill(angles, team2_values, color='black', alpha=0.15)
+
+    # Add labels
+    ax.set_xticks(angles[:-1])  # Set the positions of the angular ticks
+    ax.set_xticklabels(renamed_labels, rotation=45, fontsize=8)  # Set the tick labels
+
+    # Set the limits for all axes (0 to 100)
+    ax.set_ylim(0, 100)
+
+    # Add points at each value on the y-axis for both teams
+    ax.scatter(angles, team1_values, color='red', s=10, zorder=3)  # Points for Team 1 (Indiana)
+    ax.scatter(angles, team2_values, color='black', s=10, zorder=3)  # Points for Team 2 (Opponent)
+
+    # Title and legend
+    ax.set_title(title, size=16, pad=80)
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.2), ncol=2)
+    
+    fig.text(0.5, 0.92, 'Data Source: @hoopr | Design: Bite-Sized Bison', 
+        ha='center', va='center', fontsize=8, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+    fig.text(0.1, 0.02, 'All figures measured in percentiles within Division I CBB', 
+        ha='left', va='center', fontsize=10, color='black', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+    fig.text(0.1, -0.01, 'PPP=Points per possesion\nTempo=Possessions per 40 minutes\nEffective FG%=FGs made + 0.5*3P FGs made / FGs attempted\n3-pt Rate=3P FGs attempted / FGs attempted\nLayup/Dunk%=Layups/Dunks made / Layups/Dunks attempted\nFree Throw Rate=FTs attempted / FGs attempted\nAssist Rate=Assists / FGs attempted\nTurnover Rate=TOs / possessions\nBlock Rate=blocks / FG attempts face\nOffensive Rebound%=offensive rebounds / missed FGs', 
+        ha='left', va='top', fontsize=8, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+    
+    # Function to add a logo to the plot
+    def add_logo(fig, image_path, loc, zoom, alpha):
+        from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+        import matplotlib.image as mpimg
+
+        image = mpimg.imread(image_path)
+        imagebox = OffsetImage(image, zoom=zoom, alpha=alpha)
+        ab = AnnotationBbox(imagebox, loc, frameon=False, pad=0, bboxprops=dict(edgecolor='none'))
+        ax = fig.add_subplot(111, frame_on=False)
+        ax.add_artist(ab)
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis('off')
+
+    # Add the logo to the plot
+    add_logo(fig, 'bsb.png', loc=(1, 0), zoom=0.08, alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
+    
+    return fig
+
+# Create radar chart for offensive vs defensive comparison
+offense_preview = create_radar_chart(team1_offensive, team2_defensive, offensive_stats, f"Indiana Offense vs {opponent} Defense")
+defense_preview = create_radar_chart(team1_defensive, team2_offensive, defensive_stats, f"Indiana Defense vs {opponent} Offense")
+
