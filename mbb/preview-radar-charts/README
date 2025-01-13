@@ -1,1 +1,5 @@
+MBB Preview Radar Charts
 
+The mens’ basketball preview radar charts were created to quickly convey teams based on advanced statistics, such as effective field goal percentage, turnover rate, percentage of points from three, etc., and then convert those values into percentiles within Division I college basketball. When a team’s offensive stats and an opponent’s defensive stats are overlain, we can quickly see which dimensions of the game each team tends to hold an advantage in. 
+
+This visualization’s data was calculated (using hoopr) and organized in Python within a Jupyter Notebook environment. The chart was produced using matplotlib. It was updated before each Indiana game.
