@@ -1,0 +1,109 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+
+# Load the dataset
+df = pd.read_csv('blocking.csv')
+
+# List of Big Ten teams in dataset
+pff_big_ten_teams = ['INDIANA', 'IOWA', 'MARYLAND', 'MICHIGAN', 'MICH STATE', 'MINNESOTA', 
+                     'NEBRASKA', 'NWESTERN', 'OHIO STATE', 'OREGON', 'PENN STATE', 'PURDUE', 
+                     'RUTGERS', 'USC', 'UCLA', 'ILLINOIS', 'WASHINGTON', 'WISCONSIN']
+
+# Corresponding Big Ten team names for logo files
+big_ten_teams = [
+    "Illinois", "Indiana", "Iowa", "Maryland", "Michigan", "Michigan State", 
+    "Minnesota", "Nebraska", "Northwestern", "Ohio State", "Oregon", "Penn State", 
+    "Purdue", "Rutgers", "UCLA", "USC", "Washington", "Wisconsin"
+]
+
+# Create a dictionary to map PFF names to logo names
+team_logo_mapping = {
+    'INDIANA': 'Indiana',
+    'IOWA': 'Iowa',
+    'MARYLAND': 'Maryland',
+    'MICHIGAN': 'Michigan',
+    'MICH STATE': 'Michigan State',
+    'MINNESOTA': 'Minnesota',
+    'NEBRASKA': 'Nebraska',
+    'NWESTERN': 'Northwestern',
+    'OHIO STATE': 'Ohio State',
+    'OREGON': 'Oregon',
+    'PENN STATE': 'Penn State',
+    'PURDUE': 'Purdue',
+    'RUTGERS': 'Rutgers',
+    'USC': 'USC',
+    'UCLA': 'UCLA',
+    'ILLINOIS': 'Illinois',
+    'WASHINGTON': 'Washington',
+    'WISCONSIN': 'Wisconsin'
+}
+
+# Filter the DataFrame
+filtered_df = df[
+    (df['position'].isin(['T', 'G', 'C'])) &
+    (df['snap_counts_block'] >= 0.2 * df['snap_counts_block'].max()) &
+    (df['team_name'].isin(pff_big_ten_teams))
+]
+
+# Calculate the average grade for each team
+team_avg_grades = filtered_df.groupby('team_name')['grades_offense'].mean().reset_index()
+
+# Sort the teams by their average grades
+sorted_teams = team_avg_grades.sort_values(by='grades_offense', ascending=False)['team_name'].tolist()
+
+# Create the plot
+ol_dist_fig = plt.figure(figsize=(10, 8))
+
+# Plot lines from min to max for each team in sorted order
+for i, team in enumerate(sorted_teams):
+    team_data = filtered_df[filtered_df['team_name'] == team]['grades_offense']
+    if not team_data.empty:
+        min_val = team_data.min()
+        max_val = team_data.max()
+        mean_val = team_data.mean()
+        plt.hlines(y=i, xmin=min_val, xmax=max_val, color='blue', linewidth=1)
+
+        # Get the corresponding logo name
+        team_name_for_logo = team_logo_mapping[team]
+        logo_path = f"{team_name_for_logo}.png"
+        img = plt.imread(logo_path)
+        imagebox = OffsetImage(img, zoom=0.05)  # Adjust zoom to resize logo as needed
+        ab = AnnotationBbox(imagebox, (mean_val, i), frameon=False)
+        plt.gca().add_artist(ab)
+
+# Invert the y-axis to have the highest averages at the top
+plt.gca().invert_yaxis()
+
+# Hide y-axis labels
+plt.yticks([])
+
+plt.grid(False)
+
+# Function to add a logo
+def add_logo(fig, image_path, loc, zoom, alpha):
+    from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+    import matplotlib.image as mpimg
+
+    image = mpimg.imread(image_path)
+    imagebox = OffsetImage(image, zoom=zoom, alpha=alpha)
+    ab = AnnotationBbox(imagebox, loc, frameon=False, pad=0, bboxprops=dict(edgecolor='none'))
+    ax = fig.add_subplot(111, frame_on=False)
+    ax.add_artist(ab)
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+
+# Add the logo to the plot
+add_logo(ol_dist_fig, 'bsb.png', loc=(93, 0.09), zoom=0.09, alpha=0.5)
+
+plt.text(99, 0.02, 'Data Source: Pro Football Focus | Design: Bite-Sized Bison', 
+         ha='right', va='center', fontsize=10, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+
+plt.text(1, -0.07, 'Notes: Logos sit at each distribution\'s average grade. | OLs need 20% of FBS max blocking snaps to qualify.', 
+         ha='left', va='center', fontsize=10, color='gray', bbox=dict(facecolor=None, alpha=0, edgecolor='none'))
+
+plt.title('Big Ten 2024 Distribution of OL PFF Offensive Grades', fontsize=16)
+plt.xlabel('Offensive Grade')
+plt.tight_layout()
+plt.show()
